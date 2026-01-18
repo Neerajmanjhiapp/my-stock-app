@@ -2,53 +2,59 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-# Page setup for Mobile
-st.set_page_config(page_title="Pocket Trader", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Nifty 50 Gainers", layout="wide")
 
-st.title("📈 Pocket Stock Screener")
+st.title("🚀 Nifty 50 Top Gainers (Live)")
 
-# 1. Watchlist Section
-st.subheader("My Watchlist")
-watchlist = ["RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "SBIN.NS", "INFY.NS", "ZOMATO.NS"]
+# Nifty 50 Stocks ki List
+nifty50_tickers = [
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", 
+    "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LTIM.NS",
+    "KOTAKBANK.NS", "LT.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS",
+    "TITAN.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "SUNPHARMA.NS", "ADANIENT.NS"
+    # Note: Aap isme baaki 50 tickers bhi add kar sakte hain
+]
 
-cols = st.columns(len(watchlist))
+@st.cache_data(ttl=60) # 60 seconds tak data cache rahega
+def get_gainer_data():
+    data_list = []
+    for ticker in nifty50_tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="2d")
+            if len(hist) >= 2:
+                current_price = hist['Close'].iloc[-1]
+                prev_price = hist['Close'].iloc[-2]
+                change = ((current_price - prev_price) / prev_price) * 100
+                data_list.append({
+                    "Symbol": ticker.replace(".NS", ""),
+                    "LTP": round(current_price, 2),
+                    "% Change": round(change, 2)
+                })
+        except:
+            continue
+    return pd.DataFrame(data_list)
 
-for i, ticker in enumerate(watchlist):
-    try:
-        stock = yf.Ticker(ticker)
-        # Getting live price and change
-        info = stock.history(period="2d")
-        current_price = info['Close'].iloc[-1]
-        prev_price = info['Close'].iloc[-2]
-        change = ((current_price - prev_price) / prev_price) * 100
-        
-        with cols[i % 3]: # Mobile friendly grid
-            st.metric(label=ticker.replace(".NS", ""), 
-                      value=f"₹{current_price:.2f}", 
-                      delta=f"{change:.2f}%")
-    except:
-        continue
+# Data fetching
+df = get_gainer_data()
 
-st.divider()
+if not df.empty:
+    # Top 5 Gainers nikalna
+    top_gainers = df.sort_values(by="% Change", ascending=False).head(5)
+    
+    # Display Metrics in Columns
+    st.subheader("🔥 Top 5 Gainers Today")
+    cols = st.columns(5)
+    for i, row in enumerate(top_gainers.itertuples()):
+        with cols[i]:
+            st.metric(label=row.Symbol, value=f"₹{row.LTP}", delta=f"{row.item_3}%")
 
-# 2. Detailed Search Section
-st.subheader("🔍 Stock Analysis")
-search_ticker = st.text_input("Enter Ticker (e.g., ADANIENT.NS)", "RELIANCE.NS").upper()
+    st.divider()
 
-if st.button("Analyze Stock"):
-    with st.spinner('Fetching Data...'):
-        stock_detail = yf.Ticker(search_ticker)
-        hist = stock_detail.history(period="5d")
-        
-        if not hist.empty:
-            st.write(f"### {search_ticker} Price History")
-            st.line_chart(hist['Close']) # Mobile par graph bahut accha dikhta hai
-            
-            # Key Stats
-            col1, col2 = st.columns(2)
-            col1.write(f"**Day High:** ₹{hist['High'].iloc[-1]:.2f}")
-            col2.write(f"**Day Low:** ₹{hist['Low'].iloc[-1]:.2f}")
-        else:
-            st.error("Stock not found. Please add .NS for Indian stocks.")
+    # Full List Table
+    st.subheader("📊 All Nifty Stocks Performance")
+    st.dataframe(df.sort_values(by="% Change", ascending=False), use_container_width=True)
+else:
+    st.error("Data fetch nahi ho pa raha. Internet check karein.")
 
-st.sidebar.info("Tip: Ye app ab aapke pocket mein hai. Browser menu se 'Add to Home Screen' karna na bhoolein!")
+st.button("Manual Refresh")
